@@ -1,9 +1,23 @@
 import inspect
+import sys
 
 from .sync import iscoroutinefunction
+from .typing import (
+    ASGI2Application,
+    ASGI3Application,
+    ASGIApplication,
+    ASGIReceiveCallable,
+    ASGISendCallable,
+    Scope,
+)
+
+if sys.version_info >= (3, 13):
+    from typing import TypeIs
+else:
+    from typing_extensions import TypeIs
 
 
-def is_double_callable(application):
+def is_double_callable(application: ASGIApplication) -> TypeIs[ASGI2Application]:
     """
     Tests to see if an application is a legacy-style (double-callable) application.
     """
@@ -25,19 +39,21 @@ def is_double_callable(application):
     return not iscoroutinefunction(application)
 
 
-def double_to_single_callable(application):
+def double_to_single_callable(application: ASGI2Application) -> ASGI3Application:
     """
     Transforms a double-callable ASGI application into a single-callable one.
     """
 
-    async def new_application(scope, receive, send):
+    async def new_application(
+        scope: Scope, receive: ASGIReceiveCallable, send: ASGISendCallable
+    ) -> None:
         instance = application(scope)
         return await instance(receive, send)
 
     return new_application
 
 
-def guarantee_single_callable(application):
+def guarantee_single_callable(application: ASGIApplication) -> ASGI3Application:
     """
     Takes either a single- or double-callable application and always returns it
     in single-callable style. Use this to add backwards compatibility for ASGI

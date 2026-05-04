@@ -2,7 +2,8 @@ import asyncio
 import contextlib
 import contextvars
 import threading
-from typing import Any, Dict, Union
+from _thread import _local
+from typing import Any, Dict, Generator, Union
 
 
 class _CVar:
@@ -13,7 +14,7 @@ class _CVar:
             "asgiref.local"
         )
 
-    def __getattr__(self, key):
+    def __getattr__(self, key: str) -> Any:
         storage_object = self._data.get({})
         try:
             return storage_object[key]
@@ -79,7 +80,7 @@ class Local:
             self._storage = _CVar()
 
     @contextlib.contextmanager
-    def _lock_storage(self):
+    def _lock_storage(self) -> Generator[_local | _CVar, Any, None]:
         # Thread safe access to storage
         if self._thread_critical:
             is_async = True
@@ -116,16 +117,16 @@ class Local:
             with self._thread_lock:
                 yield self._storage
 
-    def __getattr__(self, key):
+    def __getattr__(self, key: str) -> Any:
         with self._lock_storage() as storage:
             return getattr(storage, key)
 
-    def __setattr__(self, key, value):
+    def __setattr__(self, key: str, value: Any) -> None:
         if key in ("_local", "_storage", "_thread_critical", "_thread_lock"):
             return super().__setattr__(key, value)
         with self._lock_storage() as storage:
             setattr(storage, key, value)
 
-    def __delattr__(self, key):
+    def __delattr__(self, key: str) -> None:
         with self._lock_storage() as storage:
             delattr(storage, key)

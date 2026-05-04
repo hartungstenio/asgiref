@@ -2,10 +2,19 @@ import asyncio
 import logging
 import time
 import traceback
+from typing import Any, Dict, NoReturn, TypedDict
 
 from .compatibility import guarantee_single_callable
+from .typing import ASGIApplication, ASGIReceiveEvent, Scope
 
 logger = logging.getLogger(__name__)
+
+
+class ApplicationDetails(TypedDict):
+    input_queue: asyncio.Queue[ASGIReceiveEvent]
+    future: asyncio.Future[None]
+    scope: Scope
+    last_used: float
 
 
 class StatelessServer:
@@ -43,16 +52,20 @@ class StatelessServer:
 
     application_checker_interval = 0.1
 
-    def __init__(self, application, max_applications=1000):
+    def __init__(
+        self,
+        application: ASGIApplication,
+        max_applications: int = 1000,
+    ) -> None:
         # Parameters
         self.application = application
         self.max_applications = max_applications
         # Initialisation
-        self.application_instances = {}
+        self.application_instances: Dict[str, ApplicationDetails] = {}
 
     ### Mainloop and handling
 
-    def run(self):
+    def run(self) -> None:
         """
         Runs the asyncio event loop with our handler loop.
         """
@@ -62,7 +75,7 @@ class StatelessServer:
         except KeyboardInterrupt:
             logger.info("Exiting due to Ctrl-C/interrupt")
 
-    async def arun(self):
+    async def arun(self) -> None:
         """
         Runs the asyncio event loop with our handler loop.
         """
@@ -70,7 +83,7 @@ class StatelessServer:
         class Done(Exception):
             pass
 
-        async def handle():
+        async def handle() -> NoReturn:
             await self.handle()
             raise Done
 
@@ -79,10 +92,10 @@ class StatelessServer:
         except Done:
             pass
 
-    async def handle(self):
+    async def handle(self) -> Any:
         raise NotImplementedError("You must implement handle()")
 
-    async def application_send(self, scope, message):
+    async def application_send(self, scope: Scope, message: Any) -> None:
         """
         Receives outbound sends from applications and handles them.
         """
@@ -90,7 +103,9 @@ class StatelessServer:
 
     ### Application instance management
 
-    def get_or_create_application_instance(self, scope_id, scope):
+    def get_or_create_application_instance(
+        self, scope_id: str, scope: Scope
+    ) -> asyncio.Queue[Any]:
         """
         Creates an application instance and returns its queue.
         """
@@ -101,14 +116,14 @@ class StatelessServer:
         while len(self.application_instances) > self.max_applications:
             self.delete_oldest_application_instance()
         # Make an instance of the application
-        input_queue = asyncio.Queue()
+        input_queue: asyncio.Queue[ASGIReceiveEvent] = asyncio.Queue()
         application_instance = guarantee_single_callable(self.application)
         # Run it, and stash the future for later checking
         future = asyncio.ensure_future(
             application_instance(
-                scope=scope,
-                receive=input_queue.get,
-                send=lambda message: self.application_send(scope, message),
+                scope,
+                input_queue.get,
+                lambda message: self.application_send(scope, message),
             ),
         )
         self.application_instances[scope_id] = {
@@ -119,7 +134,7 @@ class StatelessServer:
         }
         return input_queue
 
-    def delete_oldest_application_instance(self):
+    def delete_oldest_application_instance(self) -> None:
         """
         Finds and deletes the oldest application instance
         """
@@ -133,7 +148,7 @@ class StatelessServer:
                 # the same oldest time
                 return
 
-    def delete_application_instance(self, scope_id):
+    def delete_application_instance(self, scope_id: str) -> None:
         """
         Removes an application instance (makes sure its task is stopped,
         then removes it from the current set)
@@ -143,7 +158,7 @@ class StatelessServer:
         if not details["future"].done():
             details["future"].cancel()
 
-    async def application_checker(self):
+    async def application_checker(self) -> NoReturn:
         """
         Goes through the set of current application instance Futures and cleans up
         any that are done/prints exceptions for any that errored.
@@ -161,7 +176,9 @@ class StatelessServer:
                         # Exception handling might have already got here before us. That's fine.
                         pass
 
-    async def application_exception(self, exception, application_details):
+    async def application_exception(
+        self, exception: BaseException, application_details: ApplicationDetails
+    ) -> None:
         """
         Called whenever an application coroutine has an exception.
         """

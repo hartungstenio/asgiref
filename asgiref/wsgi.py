@@ -1,8 +1,21 @@
 import sys
 from collections import defaultdict
 from tempfile import SpooledTemporaryFile
+from types import TracebackType
+from typing import IO, AnyStr, DefaultDict, List, Tuple, Type, Union
+from wsgiref.types import WSGIApplication, WSGIEnvironment
 
-from asgiref.sync import AsyncToSync, sync_to_async
+from .sync import AsyncToSync, sync_to_async
+from .typing import (
+    ASGIReceiveCallable,
+    ASGISendCallable,
+    HTTPResponseBodyEvent,
+    HTTPResponseStartEvent,
+    HTTPScope,
+)
+
+ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
+OptExcInfo = Union[ExcInfo, Tuple[None, None, None]]
 
 
 class WsgiToAsgi:
@@ -10,11 +23,20 @@ class WsgiToAsgi:
     Wraps a WSGI application to make it into an ASGI application.
     """
 
-    def __init__(self, wsgi_application, duplicate_header_limit=100):
+    def __init__(
+        self,
+        wsgi_application: WSGIApplication,
+        duplicate_header_limit: int = 100,
+    ) -> None:
         self.wsgi_application = wsgi_application
         self.duplicate_header_limit = duplicate_header_limit
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(
+        self,
+        scope: HTTPScope,
+        receive: ASGIReceiveCallable,
+        send: ASGISendCallable,
+    ) -> None:
         """
         ASGI application instantiation point.
         We return a new WsgiToAsgiInstance here with the WSGI app
@@ -30,13 +52,22 @@ class WsgiToAsgiInstance:
     Per-socket instance of a wrapped WSGI application
     """
 
-    def __init__(self, wsgi_application, duplicate_header_limit=100):
+    def __init__(
+        self,
+        wsgi_application: WSGIApplication,
+        duplicate_header_limit: int = 100,
+    ) -> None:
         self.wsgi_application = wsgi_application
         self.duplicate_header_limit = duplicate_header_limit
         self.response_started = False
-        self.response_content_length = None
+        self.response_content_length: Union[int, None] = None
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(
+        self,
+        scope: HTTPScope,
+        receive: ASGIReceiveCallable,
+        send: ASGISendCallable,
+    ) -> None:
         if scope["type"] != "http":
             raise ValueError("WSGI wrapper received a non-HTTP scope")
         self.scope = scope
@@ -55,7 +86,7 @@ class WsgiToAsgiInstance:
             # Call the WSGI app
             await self.run_wsgi_app(body)
 
-    def build_environ(self, scope, body):
+    def build_environ(self, scope: HTTPScope, body: IO[AnyStr]) -> WSGIEnvironment:
         """
         Builds a scope and request body into a WSGI environ object.
         """
@@ -78,20 +109,20 @@ class WsgiToAsgiInstance:
             "wsgi.run_once": False,
         }
         # Get server name and port - required in WSGI, not in ASGI
-        if "server" in scope:
-            environ["SERVER_NAME"] = scope["server"][0]
-            environ["SERVER_PORT"] = str(scope["server"][1])
+        if server := scope.get("server"):
+            environ["SERVER_NAME"] = server[0]
+            environ["SERVER_PORT"] = str(server[1])
         else:
             environ["SERVER_NAME"] = "localhost"
             environ["SERVER_PORT"] = "80"
 
-        if scope.get("client") is not None:
-            environ["REMOTE_ADDR"] = scope["client"][0]
+        if client := scope.get("client"):
+            environ["REMOTE_ADDR"] = client[0]
 
         # Go through headers and make them into environ entries
-        _headers = defaultdict(list)
-        for name, value in self.scope.get("headers", []):
-            name = name.decode("latin1")
+        _headers: DefaultDict[str, List[str]] = defaultdict(list)
+        for bname, bvalue in self.scope.get("headers", []):
+            name = bname.decode("latin1")
             if name == "content-length":
                 corrected_name = "CONTENT_LENGTH"
             elif name == "content-type":
@@ -99,7 +130,7 @@ class WsgiToAsgiInstance:
             else:
                 corrected_name = "HTTP_%s" % name.upper().replace("-", "_")
             # HTTPbis say only ASCII chars are allowed in headers, but we latin1 just in case
-            value = value.decode("latin1")
+            value = bvalue.decode("latin1")
             if (
                 self.duplicate_header_limit
                 and len(_headers[corrected_name]) >= self.duplicate_header_limit
@@ -113,12 +144,17 @@ class WsgiToAsgiInstance:
             environ[name] = ",".join(values)
         return environ
 
-    def start_response(self, status, response_headers, exc_info=None):
+    def start_response(
+        self,
+        status: str,
+        response_headers: List[Tuple[str, str]],
+        exc_info: Union[OptExcInfo, None] = None,
+    ) -> None:
         """
         WSGI start_response callable.
         """
         # Don't allow re-calling once response has begun
-        if self.response_started:
+        if self.response_started and exc_info and exc_info[0]:
             raise exc_info[1].with_traceback(exc_info[2])
         # Don't allow re-calling without exc_info
         if hasattr(self, "response_start") and exc_info is None:
@@ -126,8 +162,7 @@ class WsgiToAsgiInstance:
                 "You cannot call start_response a second time without exc_info"
             )
         # Extract status code
-        status_code, _ = status.split(" ", 1)
-        status_code = int(status_code)
+        status_code = int(status.split(" ", 1)[0])
         # Extract headers
         headers = [
             (name.lower().encode("ascii"), value.encode("ascii"))
@@ -139,14 +174,14 @@ class WsgiToAsgiInstance:
             if name.lower() == "content-length":
                 self.response_content_length = int(value)
         # Build and send response start message.
-        self.response_start = {
-            "type": "http.response.start",
-            "status": status_code,
-            "headers": headers,
-        }
+        self.response_start = HTTPResponseStartEvent(
+            type="http.response.start",
+            status=status_code,
+            headers=headers,
+        )
 
     @sync_to_async
-    def run_wsgi_app(self, body):
+    def run_wsgi_app(self, body: IO[AnyStr]) -> None:
         """
         Called in a subthread to run the WSGI app. We encapsulate like
         this so that the start_response callable is called in the same thread.
@@ -157,22 +192,22 @@ class WsgiToAsgiInstance:
         except ValueError:
             # Return 400 Bad Request if header limit exceeded
             self.sync_send(
-                {
-                    "type": "http.response.start",
-                    "status": 400,
-                    "headers": [(b"content-type", b"text/plain")],
-                }
+                HTTPResponseStartEvent(
+                    type="http.response.start",
+                    status=400,
+                    headers=[(b"content-type", b"text/plain")],
+                )
             )
             self.sync_send(
-                {
-                    "type": "http.response.body",
-                    "body": b"Bad Request: Too many duplicate headers",
-                }
+                HTTPResponseBodyEvent(
+                    type="http.response.body",
+                    body=b"Bad Request: Too many duplicate headers",
+                )
             )
             return
         # Run the WSGI app
         bytes_sent = 0
-        for output in self.wsgi_application(environ, self.start_response):
+        for output in self.wsgi_application(environ, self.start_response):  # type: ignore[arg-type]
             # If this is the first response, include the response headers
             if not self.response_started:
                 self.response_started = True
@@ -194,4 +229,4 @@ class WsgiToAsgiInstance:
         if not self.response_started:
             self.response_started = True
             self.sync_send(self.response_start)
-        self.sync_send({"type": "http.response.body"})
+        self.sync_send(HTTPResponseBodyEvent(type="http.response.body"))

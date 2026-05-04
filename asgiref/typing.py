@@ -122,13 +122,13 @@ class HTTPResponseStartEvent(TypedDict):
     type: Literal["http.response.start"]
     status: int
     headers: Iterable[Tuple[bytes, bytes]]
-    trailers: bool
+    trailers: NotRequired[bool]
 
 
 class HTTPResponseBodyEvent(TypedDict):
     type: Literal["http.response.body"]
-    body: bytes
-    more_body: bool
+    body: NotRequired[bytes]
+    more_body: NotRequired[bool]
 
 
 class HTTPResponseTrailersEvent(TypedDict):
@@ -258,13 +258,11 @@ ASGISendCallable = Callable[[ASGISendEvent], Awaitable[None]]
 
 
 class ASGI2Protocol(Protocol):
-    def __init__(self, scope: Scope) -> None:
-        ...
+    def __init__(self, scope: Scope) -> None: ...
 
     async def __call__(
         self, receive: ASGIReceiveCallable, send: ASGISendCallable
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 ASGI2Application = Type[ASGI2Protocol]
