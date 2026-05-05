@@ -9,8 +9,7 @@
 import asyncio
 import warnings
 from types import TracebackType
-from typing import Any  # noqa
-from typing import Optional, Type
+from typing import Any, Optional
 
 
 class timeout:
@@ -41,18 +40,18 @@ class timeout:
             warnings.warn(
                 """The loop argument to timeout() is deprecated.""", DeprecationWarning
             )
-        self._loop = loop
-        self._task = None  # type: Optional[asyncio.Task[Any]]
-        self._cancelled = False
-        self._cancel_handler = None  # type: Optional[asyncio.Handle]
-        self._cancel_at = None  # type: Optional[float]
+        self._loop: asyncio.AbstractEventLoop = loop
+        self._task: Optional[asyncio.Task[Any]] = None
+        self._cancelled: bool = False
+        self._cancel_handler: Optional[asyncio.Handle] = None
+        self._cancel_at: Optional[float] = None
 
     def __enter__(self) -> "timeout":
         return self._do_enter()
 
     def __exit__(
         self,
-        exc_type: Type[BaseException],
+        exc_type: type[BaseException],
         exc_val: BaseException,
         exc_tb: TracebackType,
     ) -> Optional[bool]:
@@ -64,7 +63,7 @@ class timeout:
 
     async def __aexit__(
         self,
-        exc_type: Type[BaseException],
+        exc_type: type[BaseException],
         exc_val: BaseException,
         exc_tb: TracebackType,
     ) -> None:
@@ -89,9 +88,7 @@ class timeout:
 
         self._task = asyncio.current_task(self._loop)
         if self._task is None:
-            raise RuntimeError(
-                "Timeout context manager should be used " "inside a task"
-            )
+            raise RuntimeError("Timeout context manager should be used inside a task")
 
         if self._timeout <= 0:
             self._loop.call_soon(self._cancel_task)
@@ -101,7 +98,7 @@ class timeout:
         self._cancel_handler = self._loop.call_at(self._cancel_at, self._cancel_task)
         return self
 
-    def _do_exit(self, exc_type: Type[BaseException]) -> None:
+    def _do_exit(self, exc_type: type[BaseException]) -> None:
         if exc_type is asyncio.CancelledError and self._cancelled:
             self._cancel_handler = None
             self._task = None
