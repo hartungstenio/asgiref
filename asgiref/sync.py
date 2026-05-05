@@ -173,7 +173,9 @@ class AsyncToSync(Generic[_P, _R]):
         contextvars.ContextVar("async_single_thread_context")
     )
 
-    context_to_thread_executor: "weakref.WeakKeyDictionary[AsyncSingleThreadContext, ThreadPoolExecutor]" = weakref.WeakKeyDictionary()
+    context_to_thread_executor: (
+        "weakref.WeakKeyDictionary[AsyncSingleThreadContext, ThreadPoolExecutor]"
+    ) = weakref.WeakKeyDictionary()
 
     def __init__(
         self,
@@ -412,7 +414,9 @@ class SyncToAsync(Generic[_P, _R]):
 
     # Maintaining a weak reference to the context ensures that thread pools are
     # erased once the context goes out of scope. This terminates the thread pool.
-    context_to_thread_executor: "weakref.WeakKeyDictionary[ThreadSensitiveContext, ThreadPoolExecutor]" = weakref.WeakKeyDictionary()
+    context_to_thread_executor: (
+        "weakref.WeakKeyDictionary[ThreadSensitiveContext, ThreadPoolExecutor]"
+    ) = weakref.WeakKeyDictionary()
 
     def __init__(
         self,
