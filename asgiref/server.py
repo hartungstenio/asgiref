@@ -61,7 +61,7 @@ class StatelessServer:
         self.application = application
         self.max_applications = max_applications
         # Initialisation
-        self.application_instances: Dict[str, ApplicationDetails] = {}
+        self.application_instances: dict[str, ApplicationDetails] = {}
 
     ### Mainloop and handling
 

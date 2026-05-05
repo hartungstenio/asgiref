@@ -14,8 +14,8 @@ from .typing import (
     HTTPScope,
 )
 
-ExcInfo = Tuple[Type[BaseException], BaseException, TracebackType]
-OptExcInfo = Union[ExcInfo, Tuple[None, None, None]]
+ExcInfo = tuple[type[BaseException], BaseException, TracebackType]
+OptExcInfo = Union[ExcInfo, tuple[None, None, None]]
 
 
 class WsgiToAsgi:
@@ -120,7 +120,7 @@ class WsgiToAsgiInstance:
             environ["REMOTE_ADDR"] = client[0]
 
         # Go through headers and make them into environ entries
-        _headers: DefaultDict[str, List[str]] = defaultdict(list)
+        _headers: DefaultDict[str, list[str]] = defaultdict(list)
         for bname, bvalue in self.scope.get("headers", []):
             name = bname.decode("latin1")
             if name == "content-length":
@@ -147,7 +147,7 @@ class WsgiToAsgiInstance:
     def start_response(
         self,
         status: str,
-        response_headers: List[Tuple[str, str]],
+        response_headers: list[tuple[str, str]],
         exc_info: Union[OptExcInfo, None] = None,
     ) -> None:
         """

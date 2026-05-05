@@ -3,7 +3,8 @@ import contextlib
 import contextvars
 import threading
 from _thread import _local
-from typing import Any, Dict, Generator, Union
+from collections.abc import Generator
+from typing import Any, Dict, Union
 
 
 class _CVar:
