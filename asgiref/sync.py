@@ -8,13 +8,12 @@ import sys
 import threading
 import warnings
 import weakref
+from collections.abc import Awaitable, Coroutine
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import (
     TYPE_CHECKING,
     Any,
-    Awaitable,
     Callable,
-    Coroutine,
     Dict,
     Generic,
     List,
@@ -174,9 +173,7 @@ class AsyncToSync(Generic[_P, _R]):
         contextvars.ContextVar("async_single_thread_context")
     )
 
-    context_to_thread_executor: (
-        "weakref.WeakKeyDictionary[AsyncSingleThreadContext, ThreadPoolExecutor]"
-    ) = weakref.WeakKeyDictionary()
+    context_to_thread_executor: "weakref.WeakKeyDictionary[AsyncSingleThreadContext, ThreadPoolExecutor]" = weakref.WeakKeyDictionary()
 
     def __init__(
         self,
@@ -336,7 +333,7 @@ class AsyncToSync(Generic[_P, _R]):
         call_result: "Future[_R]",
         exc_info: "OptExcInfo",
         task_context: "Optional[List[asyncio.Task[Any]]]",
-        context: List[contextvars.Context],
+        context: list[contextvars.Context],
         awaitable: Union[Coroutine[Any, Any, _R], Awaitable[_R]],
     ) -> None:
         """
@@ -415,9 +412,7 @@ class SyncToAsync(Generic[_P, _R]):
 
     # Maintaining a weak reference to the context ensures that thread pools are
     # erased once the context goes out of scope. This terminates the thread pool.
-    context_to_thread_executor: (
-        "weakref.WeakKeyDictionary[ThreadSensitiveContext, ThreadPoolExecutor]"
-    ) = weakref.WeakKeyDictionary()
+    context_to_thread_executor: "weakref.WeakKeyDictionary[ThreadSensitiveContext, ThreadPoolExecutor]" = weakref.WeakKeyDictionary()
 
     def __init__(
         self,
@@ -487,7 +482,7 @@ class SyncToAsync(Generic[_P, _R]):
         context = contextvars.copy_context() if self.context is None else self.context
         child = functools.partial(self.func, *args, **kwargs)
         func = context.run
-        task_context: List[asyncio.Task[Any]] = []
+        task_context: list[asyncio.Task[Any]] = []
 
         # Run the code in the right thread
         exec_coro = loop.run_in_executor(
