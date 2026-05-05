@@ -174,9 +174,9 @@ class AsyncToSync(Generic[_P, _R]):
         contextvars.ContextVar("async_single_thread_context")
     )
 
-    context_to_thread_executor: "weakref.WeakKeyDictionary[AsyncSingleThreadContext, ThreadPoolExecutor]" = (
-        weakref.WeakKeyDictionary()
-    )
+    context_to_thread_executor: (
+        "weakref.WeakKeyDictionary[AsyncSingleThreadContext, ThreadPoolExecutor]"
+    ) = weakref.WeakKeyDictionary()
 
     def __init__(
         self,
@@ -304,9 +304,9 @@ class AsyncToSync(Generic[_P, _R]):
                         ]
                     else:
                         loop_executor = ThreadPoolExecutor(max_workers=1)
-                        self.context_to_thread_executor[
-                            single_thread_context
-                        ] = loop_executor
+                        self.context_to_thread_executor[single_thread_context] = (
+                            loop_executor
+                        )
                 else:
                     # Make our own event loop - in a new thread - and run inside that.
                     loop_executor = ThreadPoolExecutor(max_workers=1)
@@ -415,9 +415,9 @@ class SyncToAsync(Generic[_P, _R]):
 
     # Maintaining a weak reference to the context ensures that thread pools are
     # erased once the context goes out of scope. This terminates the thread pool.
-    context_to_thread_executor: "weakref.WeakKeyDictionary[ThreadSensitiveContext, ThreadPoolExecutor]" = (
-        weakref.WeakKeyDictionary()
-    )
+    context_to_thread_executor: (
+        "weakref.WeakKeyDictionary[ThreadSensitiveContext, ThreadPoolExecutor]"
+    ) = weakref.WeakKeyDictionary()
 
     def __init__(
         self,
@@ -568,8 +568,7 @@ def async_to_sync(
 ) -> Callable[
     [Union[Callable[_P, Coroutine[Any, Any, _R]], Callable[_P, Awaitable[_R]]]],
     Callable[_P, _R],
-]:
-    ...
+]: ...
 
 
 @overload
@@ -580,8 +579,7 @@ def async_to_sync(
     ],
     *,
     force_new_loop: bool = False,
-) -> Callable[_P, _R]:
-    ...
+) -> Callable[_P, _R]: ...
 
 
 def async_to_sync(
@@ -617,8 +615,7 @@ def sync_to_async(
     thread_sensitive: bool = True,
     executor: Optional["ThreadPoolExecutor"] = None,
     context: Optional[contextvars.Context] = None,
-) -> Callable[[Callable[_P, _R]], Callable[_P, Coroutine[Any, Any, _R]]]:
-    ...
+) -> Callable[[Callable[_P, _R]], Callable[_P, Coroutine[Any, Any, _R]]]: ...
 
 
 @overload
@@ -628,8 +625,7 @@ def sync_to_async(
     thread_sensitive: bool = True,
     executor: Optional["ThreadPoolExecutor"] = None,
     context: Optional[contextvars.Context] = None,
-) -> Callable[_P, Coroutine[Any, Any, _R]]:
-    ...
+) -> Callable[_P, Coroutine[Any, Any, _R]]: ...
 
 
 def sync_to_async(
